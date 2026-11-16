@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Sistem Lampu Lalu Lintas PLC (4 Simpang)</title>
+    <style>
+        :root {
+            --bg-dark: #1e242b;
+            --panel-bg: #283039;
+            --border-color: #3d4856;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --plc-green: #22c55e;
+            --plc-red: #ef4444;
+            --plc-amber: #f59e0b;
+            --plc-blue: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        header {
+            background-color: #15191e;
+            padding: 12px 24px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        header h1 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #38bdf8;
+        }
+
+        .badge-plc {
+            background: #0284c7;
+            color: white;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 16px;
+            padding: 16px;
+            flex: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        @media (max-width: 1100px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Canvas Area */
+        .simulation-wrapper {
+            background: #2b3a2c;
+            border: 3px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+
+        canvas {
+            width: 100%;
+            max-width: 780px;
+            height: auto;
+            display: block;
+            background: #5ca458;
+        }
+
+        .interlock-banner {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid #22c55e;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(4px);
+            z-index: 10;
+        }
+
+        .interlock-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* PLC Control Panel */
+        .plc-panel {
+            background: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .panel-section {
+            background: #1e242b;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .panel-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        button {
+            padding: 9px 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            color: white;
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        .btn-start { background: #16a34a; }
+        .btn-start:hover { background: #15803d; }
+
+        .btn-stop { background: #dc2626; }
+        .btn-stop:hover { background: #b91c1c; }
+
+        .btn-amber { background: #d97706; }
+        .btn-amber:hover { background: #b45309; }
+
+        .btn-manual {
+            background: #334155;
+            border: 1px solid #475569;
+            margin-top: 6px;
+        }
+        .btn-manual.active {
+            background: #2563eb;
+            border-color: #60a5fa;
+        }
+
+        /* PLC I/O Monitor Grid */
+        .io-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.78rem;
+        }
+
+        .io-table th, .io-table td {
+            padding: 6px 6px;
+            text-align: center;
+            border-bottom: 1px solid #334155;
+        }
+
+        .io-table th {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .io-table td:first-child {
+            text-align: left;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+
+        .led {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #334155;
+            border: 1px solid #475569;
+            vertical-align: middle;
+        }
+
+        .led.red.on { background: #ef4444; box-shadow: 0 0 8px #ef4444; border-color: #fca5a5; }
+        .led.yellow.on { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; border-color: #fde68a; }
+        .led.green.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; border-color: #86efac; }
+
+        /* Timer & Registers */
+        .registers {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.82rem;
+        }
+
+        .reg-box {
+            background: #0f172a;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border-left: 3px solid #38bdf8;
+        }
+
+        .reg-label {
+            color: #94a3b8;
+            font-size: 0.72rem;
+        }
+
+        .reg-val {
+            color: #38bdf8;
+            font-size: 1rem;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* Ladder Logic Visualizer */
+        .ladder-box {
+            background: #0f172a;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        .rung {
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .rung.active-rung {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+        }
+
+        /* Slider control */
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #38bdf8;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>
+        <span>🚦</span> Simulasi Sistem Lampu Lalu Lintas Kota Berbasis PLC
+        <span class="badge-plc">PLC S7-1200 / LADDER LOGIC</span>
+    </h1>
+    <div style="font-size: 0.82rem; color: #94a3b8;">
+        Mode Siklus: <strong>4 Fase Terpisah (Hanya 1 Hijau Aktif)</strong>
+    </div>
+</header>
+
+<div class="main-container">
+    <!-- Canvas Simulasi Kartun -->
+    <div class="simulation-wrapper">
+        <div class="interlock-banner">
+            <div class="interlock-dot" id="interlockDot"></div>
+            <span id="interlockStatus">INTERLOCK AKTIF: Maksimal 1 Jalur Hijau (0 Konflik)</span>
+        </div>
+        <canvas id="cityCanvas" width="780" height="720"></canvas>
+    </div>
+
+    <!-- Panel Kontrol PLC -->
+    <div class="plc-panel">
+        <!-- Kontrol Operasi -->
+        <div class="panel-section">
+            <div class="panel-title">
+                <span>🎛️ Kontrol CPU PLC</span>
+                <span id="cpuStateBadge" style="color: #22c55e;">● RUN</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn-start" onclick="setPlcMode('RUN')">▶ START (I0.0)</button>
+                <button class="btn-stop" onclick="setPlcMode('STOP')">⏹ STOP (I0.1)</button>
+                <button class="btn-amber" onclick="setPlcMode('CAUTION')">⚠ MALAM (I0.2)</button>
+            </div>
+            <div class="btn-group" style="margin-top: 6px; grid-template-columns: 1fr 1fr;">
+                <button class="btn-manual" id="btnStep" onclick="manualNextPhase()">⏭ Lompat Fase (I0.3)</button>
+                <button class="btn-manual" id="btnSpawn" onclick="spawnExtraCar()">🚗 Tambah Mobil</button>
+            </div>
+
+            <div class="slider-row">
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Durasi Lampu Hijau (Timer T1):</span>
+                    <strong id="greenTimeLabel">6 Detik</strong>
+                </div>
+                <input type="range" id="greenDurationSlider" min="3" max="15" value="6" oninput="updateGreenDuration(this.value)">
+            </div>
+        </div>
+
+        <!-- Register & Timer PLC -->
+        <div class="panel-section">
+            <div class="panel-title">⏱️ Register & Timer PLC</div>
+            <div class="registers">
+                <div class="reg-box">
+                    <div class="reg-label">STEP COUNTER (MW10)</div>
+                    <div class="reg-val" id="regStep">FASE 1 (UTARA)</div>
+                </div>
+                <div class="reg-box">
+                    <div class="reg-label">TIMER TON (T1.ET)</div>
+                    <div class="reg-val" id="regTimer">0.0 s</div>
+                </div>
+                <div class="reg-box">
+                    <div class="reg-label">JUMLAH HIJAU AKTIF</div>
+                    <div class="reg-val" id="regGreenCount" style="color: #22c55e;">1 JALUR</div>
+                </div>
+                <div class="reg-box">
+                    <div class="reg-label">SENSOR KENDARAAN</div>
+                    <div class="reg-val" id="regSensors" style="font-size: 0.85rem;">I1.0:0 I1.1:0 I1.2:0 I1.3:0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output PLC Q0.0 - Q1.3 -->
+        <div class="panel-section">
+            <div class="panel-title">🔌 Digital Output PLC (Q0.0 - Q1.3)</div>
+            <table class="io-table">
+                <thead>
+                    <tr>
+                        <th>Arah Jalur</th>
+                        <th>Merah</th>
+                        <th>Kuning</th>
+                        <th>Hijau</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1. UTARA (North)</td>
+                        <td><span class="led red" id="led-N-R"></span> <small>Q0.0</small></td>
+                        <td><span class="led yellow" id="led-N-Y"></span> <small>Q0.1</small></td>
+                        <td><span class="led green" id="led-N-G"></span> <small>Q0.2</small></td>
+                        <td id="txt-N">BERHENTI</td>
+                    </tr>
+                    <tr>
+                        <td>2. TIMUR (East)</td>
+                        <td><span class="led red" id="led-E-R"></span> <small>Q0.3</small></td>
+                        <td><span class="led yellow" id="led-E-Y"></span> <small>Q0.4</small></td>
+                        <td><span class="led green" id="led-E-G"></span> <small>Q0.5</small></td>
+                        <td id="txt-E">BERHENTI</td>
+                    </tr>
+                    <tr>
+                        <td>3. SELATAN (South)</td>
+                        <td><span class="led red" id="led-S-R"></span> <small>Q0.6</small></td>
+                        <td><span class="led yellow" id="led-S-Y"></span> <small>Q0.7</small></td>
+                        <td><span class="led green" id="led-S-G"></span> <small>Q1.0</small></td>
+                        <td id="txt-S">BERHENTI</td>
+                    </tr>
+                    <tr>
+                        <td>4. BARAT (West)</td>
+                        <td><span class="led red" id="led-W-R"></span> <small>Q1.1</small></td>
+                        <td><span class="led yellow" id="led-W-Y"></span> <small>Q1.2</small></td>
+                        <td><span class="led green" id="led-W-G"></span> <small>Q1.3</small></td>
+                        <td id="txt-W">BERHENTI</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mini Ladder Logic Monitor -->
+        <div class="panel-section">
+            <div class="panel-title">🪜 Eksekusi Ladder Logic (Interlock)</div>
+            <div class="ladder-box" id="ladderBox">
+                <div class="rung" id="rung-0">|-[M0.0]--[/Q0.5]--[/Q1.0]--[/Q1.3]--(Q0.2 UTARA HIJAU)-|</div>
+                <div class="rung" id="rung-1">|-[M0.1]--[/Q0.2]--[/Q1.0]--[/Q1.3]--(Q0.5 TIMUR HIJAU)-|</div>
+                <div class="rung" id="rung-2">|-[M0.2]--[/Q0.2]--[/Q0.5]--[/Q1.3]--(Q1.0 SELATAN HIJAU)|</div>
+                <div class="rung" id="rung-3">|-[M0.3]--[/Q0.2]--[/Q0.5]--[/Q1.0]--(Q1.3 BARAT HIJAU)-|</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('cityCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Konfigurasi Simpang
+    const W = canvas.width;
+    const H = canvas.height;
+    const CX = W / 2;
+    const CY = H / 2;
+    const ROAD_W = 170; // Lebar total jalan (2 lajur)
+    const HALF_ROAD = ROAD_W / 2;
+    const STOP_OFFSET = HALF_ROAD + 22;
+
+    // State PLC
+    let plcMode = 'RUN'; // 'RUN', 'STOP', 'CAUTION'
+    let currentDirIndex = 0; // 0: Utara (N), 1: Timur (E), 2: Selatan (S), 3: Barat (W)
+    let subState = 'GREEN'; // 'GREEN', 'YELLOW', 'ALL_RED'
+    let timer = 0;
+    let greenDuration = 6.0;
+    const yellowDuration = 2.0;
+    const allRedDuration = 1.2; // Jeda keamanan antar fase
+
+    const DIRS = ['N', 'E', 'S', 'W'];
+    const DIR_NAMES = ['UTARA', 'TIMUR', 'SELATAN', 'BARAT'];
+
+    // Status lampu setiap arah: 'RED', 'YELLOW', 'GREEN', 'OFF'
+    let lights = {
+        N: 'GREEN',
+        E: 'RED',
+        S: 'RED',
+        W: 'RED'
+    };
+
+    // Sensor induktif di aspal
+    let sensors = { N: false, E: false, S: false, W: false };
+
+    // Daftar Kendaraan Kartun
+    const CAR_PALETTES = [
+        { body: '#ef4444', roof: '#fca5a5', type: 'sedan' },
+        { body: '#3b82f6', roof: '#93c5fd', type: 'sedan' },
+        { body: '#f59e0b', roof: '#fde68a', type: 'taxi' },
+        { body: '#8b5cf6', roof: '#c4b5fd', type: 'suv' },
+        { body: '#ec4899', roof: '#f9a8d4', type: 'sedan' },
+        { body: '#14b8a6', roof: '#99f6e4', type: 'bus' }
+    ];
+
+    let cars = [];
+    let clouds = [
+        { x: 100, y: 70, s: 1.0 },
+        { x: 580, y: 110, s: 0.8 },
+        { x: 640, y: 610, s: 1.1 }
+    ];
+
+    // Inisialisasi beberapa mobil awal
+    function initCars() {
+        cars = [];
+        DIRS.forEach((dir, idx) => {
+            spawnCar(dir, idx * 45);
+            spawnCar(dir, idx * 45 + 95);
+        });
+    }
+
+    function spawnCar(dir, extraOffset = 0) {
+        const palette = CAR_PALETTES[Math.floor(Math.random() * CAR_PALETTES.length)];
+        const length = palette.type === 'bus' ? 54 : 40;
+        const width = 24;
+        const laneOffset = 42; // Posisi lajur kiri (aturan lalu lintas Indonesia)
+
+        let x, y, vx, vy, angle;
+
+        // Aturan lalu lintas Indonesia (Kiri jalan):
+        // N: Datang dari Atas menuju Bawah -> berada di sisi Barat (CX - laneOffset)
+        // S: Datang dari Bawah menuju Atas -> berada di sisi Timur (CX + laneOffset)
+        // E: Datang dari Kanan menuju Kiri -> berada di sisi Utara (CY - laneOffset)
+        // W: Datang dari Kiri menuju Kanan -> berada di sisi Selatan (CY + laneOffset)
+
+        if (dir === 'N') {
+            x = CX - laneOffset;
+            y = -50 - extraOffset;
+            vx = 0; vy = 1; angle = Math.PI / 2;
+        } else if (dir === 'S') {
+            x = CX + laneOffset;
+            y = H + 50 + extraOffset;
+            vx = 0; vy = -1; angle = -Math.PI / 2;
+        } else if (dir === 'E') {
+            x = W + 50 + extraOffset;
+            y = CY - laneOffset;
+            vx = -1; vy = 0; angle = Math.PI;
+        } else if (dir === 'W') {
+            x = -50 - extraOffset;
+            y = CY + laneOffset;
+            vx = 1; vy = 0; angle = 0;
+        }
+
+        // Cek agar tidak bertumpuk saat spawn
+        const tooClose = cars.some(c => c.dir === dir && Math.hypot(c.x - x, c.y - y) < 75);
+        if (!tooClose) {
+            cars.push({
+                dir, x, y, vx, vy, angle,
+                speed: 0,
+                maxSpeed: palette.type === 'bus' ? 1.9 : 2.4 + Math.random() * 0.4,
+                length, width,
+                palette,
+                passedStopLine: false
+            });
+        }
+    }
+
+    function spawnExtraCar() {
+        const randomDir = DIRS[Math.floor(Math.random() * DIRS.length)];
+        spawnCar(randomDir, 0);
+    }
+
+    // Kontrol UI
+    function setPlcMode(mode) {
+        plcMode = mode;
+        timer = 0;
+        const badge = document.getElementById('cpuStateBadge');
+        if (mode === 'RUN') {
+            badge.textContent = '● RUN';
+            badge.style.color = '#22c55e';
+            subState = 'GREEN';
+        } else if (mode === 'STOP') {
+            badge.textContent = '■ STOP (ALL RED)';
+            badge.style.color = '#ef4444';
+        } else if (mode === 'CAUTION') {
+            badge.textContent = '▲ FLASHING AMBER';
+            badge.style.color = '#f59e0b';
+        }
+        applyPlcLogic();
+    }
+
+    function manualNextPhase() {
+        if (plcMode !== 'RUN') setPlcMode('RUN');
+        timer = 0;
+        subState = 'GREEN';
+        currentDirIndex = (currentDirIndex + 1) % 4;
+        applyPlcLogic();
+    }
+
+    function updateGreenDuration(val) {
+        greenDuration = parseFloat(val);
+        document.getElementById('greenTimeLabel').textContent = val + ' Detik';
+    }
+
+    // Logika PLC & Interlock Ketat (Hanya 1 Hijau pada satu waktu)
+    function applyPlcLogic() {
+        // Reset semua ke RED terlebih dahulu (Fail-Safe)
+        lights = { N: 'RED', E: 'RED', S: 'RED', W: 'RED' };
+
+        if (plcMode === 'STOP') {
+            // Semua Merah
+        } else if (plcMode === 'CAUTION') {
+            const blinkOn = Math.floor(timer * 2) % 2 === 0;
+            const state = blinkOn ? 'YELLOW' : 'OFF';
+            lights = { N: state, E: state, S: state, W: state };
+        } else if (plcMode === 'RUN') {
+            const activeDir = DIRS[currentDirIndex];
+            if (subState === 'GREEN') {
+                lights[activeDir] = 'GREEN';
+            } else if (subState === 'YELLOW') {
+                lights[activeDir] = 'YELLOW';
+            } else {
+                // ALL_RED: semua tetap RED untuk mengosongkan persimpangan
+            }
+        }
+
+        // Hardware/Software Interlock Verification: Pastikan tidak pernah > 1 GREEN
+        let greenCount = 0;
+        DIRS.forEach(d => {
+            if (lights[d] === 'GREEN') greenCount++;
+        });
+
+        if (greenCount > 1) {
+            // Emergency Fault Fallback jika terjadi anomali
+            lights = { N: 'RED', E: 'RED', S: 'RED', W: 'RED' };
+            greenCount = 0;
+        }
+
+        updatePlcDashboard(greenCount);
+    }
+
+    function updatePlcDashboard(greenCount) {
+        DIRS.forEach((dir, idx) => {
+            const state = lights[dir];
+            document.getElementById(`led-${dir}-R`).classList.toggle('on', state === 'RED');
+            document.getElementById(`led-${dir}-Y`).classList.toggle('on', state === 'YELLOW');
+            document.getElementById(`led-${dir}-G`).classList.toggle('on', state === 'GREEN');
+
+            const txtEl = document.getElementById(`txt-${dir}`);
+            if (state === 'GREEN') {
+                txtEl.textContent = 'JALAN (1)';
+                txtEl.style.color = '#22c55e';
+                txtEl.style.fontWeight = 'bold';
+            } else if (state === 'YELLOW') {
+                txtEl.textContent = 'HATI-HATI';
+                txtEl.style.color = '#f59e0b';
+                txtEl.style.fontWeight = 'bold';
+            } else if (state === 'RED') {
+                txtEl.textContent = 'STOP';
+                txtEl.style.color = '#ef4444';
+                txtEl.style.fontWeight = 'normal';
+            } else {
+                txtEl.textContent = 'OFF';
+                txtEl.style.color = '#64748b';
+            }
+
+            // Highlight Ladder Rung
+            const rungEl = document.getElementById(`rung-${idx}`);
+            if (plcMode === 'RUN' && currentDirIndex === idx && state === 'GREEN') {
+                rungEl.classList.add('active-rung');
+            } else {
+                rungEl.classList.remove('active-rung');
+            }
+        });
+
+        // Update Register Display
+        const regStep = document.getElementById('regStep');
+        if (plcMode === 'RUN') {
+            regStep.textContent = `FASE ${currentDirIndex + 1} (${DIR_NAMES[currentDirIndex]})`;
+        } else {
+            regStep.textContent = plcMode;
+        }
+
+        document.getElementById('regTimer').textContent = timer.toFixed(1) + ' s';
+        const regGreen = document.getElementById('regGreenCount');
+        regGreen.textContent = `${greenCount} JALUR`;
+        regGreen.style.color = greenCount === 1 ? '#22c55e' : '#f59e0b';
+
+        document.getElementById('regSensors').textContent =
+            `I1.0:${sensors.N?1:0} I1.1:${sensors.E?1:0} I1.2:${sensors.S?1:0} I1.3:${sensors.W?1:0}`;
+    }
+
+    // Update Fisika & Pergerakan Mobil
+    function updateCars() {
+        sensors = { N: false, E: false, S: false, W: false };
+
+        for (let i = 0; i < cars.length; i++) {
+            const car = cars[i];
+            let shouldStop = false;
+
+            // 1. Cek jarak ke garis berhenti (Stop Line)
+            let distToStop = Infinity;
+            if (car.dir === 'N') distToStop = (CY - STOP_OFFSET) - (car.y + car.length / 2);
+            if (car.dir === 'S') distToStop = (car.y - car.length / 2) - (CY + STOP_OFFSET);
+            if (car.dir === 'E') distToStop = (car.x - car.length / 2) - (CX + STOP_OFFSET);
+            if (car.dir === 'W') distToStop = (CX - STOP_OFFSET) - (car.x + car.length / 2);
+
+            // Deteksi sensor induktif sebelum garis berhenti
+            if (distToStop > -10 && distToStop < 65) {
+                sensors[car.dir] = true;
+            }
+
+            if (distToStop < 0) {
+                car.passedStopLine = true;
+            }
+
+            // Jika belum melewati garis berhenti dan lampu bukan HIJAU
+            const lightState = lights[car.dir];
+            if (!car.passedStopLine && lightState !== 'GREEN') {
+                // Jika kuning dan sudah sangat dekat (< 12px), lanjut melintas agar tidak rem mendadak di tengah
+                if (!(lightState === 'YELLOW' && distToStop < 12)) {
+                    if (distToStop <= 28 && distToStop >= -8) {
+                        shouldStop = true;
+                    }
+                }
+            }
+
+            // 2. Cek jarak dengan mobil di depannya pada jalur yang sama
+            for (let j = 0; j < cars.length; j++) {
+                if (i === j) continue;
+                const other = cars[j];
+                if (car.dir !== other.dir) continue;
+
+                let gap = Infinity;
+                if (car.dir === 'N' && other.y > car.y) gap = (other.y - other.length/2) - (car.y + car.length/2);
+                if (car.dir === 'S' && other.y < car.y) gap = (car.y - car.length/2) - (other.y + other.length/2);
+                if (car.dir === 'E' && other.x < car.x) gap = (car.x - car.length/2) - (other.x + other.length/2);
+                if (car.dir === 'W' && other.x > car.x) gap = (other.x - other.length/2) - (car.x + car.length/2);
+
+                if (gap < 22) {
+                    shouldStop = true;
+                    break;
+                }
+            }
+
+            // Akselerasi / Pengereman halus
+            if (shouldStop) {
+                car.speed = Math.max(0, car.speed - 0.18);
+            } else {
+                car.speed = Math.min(car.maxSpeed, car.speed + 0.08);
+            }
+
+            car.x += car.vx * car.speed;
+            car.y += car.vy * car.speed;
+        }
+
+        // Hapus mobil yang sudah keluar layar
+        cars = cars.filter(c => c.x > -120 && c.x < W + 120 && c.y > -120 && c.y < H + 120);
+    }
+
+    // ==========================================
+    // RENDERING GRAFIS KARTUN KOTA & PLC
+    // ==========================================
+    function drawEnvironment() {
+        // Rumput taman kota
+        ctx.fillStyle = '#6ab04c';
+        ctx.fillRect(0, 0, W, H);
+
+        // Tekstur rumput ringan
+        ctx.fillStyle = '#5da140';
+        for (let gx = 20; gx < W; gx += 60) {
+            for (let gy = 20; gy < H; gy += 60) {
+                if (Math.abs(gx - CX) > HALF_ROAD + 20 && Math.abs(gy - CY) > HALF_ROAD + 20) {
+                    ctx.beginPath();
+                    ctx.arc(gx, gy, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Trotoar (Sidewalk)
+        const sw = 18;
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(CX - HALF_ROAD - sw, 0, ROAD_W + sw * 2, H);
+        ctx.fillRect(0, CY - HALF_ROAD - sw, W, ROAD_W + sw * 2);
+
+        // Aspal Jalan Raya
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(CX - HALF_ROAD, 0, ROAD_W, H);
+        ctx.fillRect(0, CY - HALF_ROAD, W, ROAD_W);
+
+        // Kotak Tengah Persimpangan (Yellow Box Junction style)
+        ctx.fillStyle = '#2c3748';
+        ctx.fillRect(CX - HALF_ROAD, CY - HALF_ROAD, ROAD_W, ROAD_W);
+
+        // Garis Kuning Kotak Persimpangan
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.35)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(CX - HALF_ROAD + 4, CY - HALF_ROAD + 4, ROAD_W - 8, ROAD_W - 8);
+
+        // Marka Jalan Tengah (Garis Kuning Putus-putus)
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([16, 14]);
+
+        // Utara & Selatan
+        ctx.beginPath();
+        ctx.moveTo(CX, 0); ctx.lineTo(CX, CY - STOP_OFFSET);
+        ctx.moveTo(CX, CY + STOP_OFFSET); ctx.lineTo(CX, H);
+        ctx.stroke();
+
+        // Barat & Timur
+        ctx.beginPath();
+        ctx.moveTo(0, CY); ctx.lineTo(CX - STOP_OFFSET, CY);
+        ctx.moveTo(CX + STOP_OFFSET, CY); ctx.lineTo(W, CY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Zebra Cross & Garis Berhenti (Stop Line)
+        drawCrosswalkAndStopLines();
+
+        // Sensor Induktif PLC di Aspal (Loop Detector)
+        drawInductiveSensors();
+
+        // Dekorasi Bangunan & Pohon Kartun di 4 Sudut
+        drawCityBuildings();
+    }
+
+    function drawCrosswalkAndStopLines() {
+        ctx.fillStyle = '#f8fafc';
+        const stripeW = 10;
+        const stripeLen = 22;
+
+        // Zebra cross Utara & Selatan
+        for (let x = CX - HALF_ROAD + 10; x < CX + HALF_ROAD - 10; x += 20) {
+            ctx.fillRect(x, CY - HALF_ROAD - 24, stripeW, stripeLen);
+            ctx.fillRect(x, CY + HALF_ROAD + 2, stripeW, stripeLen);
+        }
+
+        // Zebra cross Barat & Timur
+        for (let y = CY - HALF_ROAD + 10; y < CY + HALF_ROAD - 10; y += 20) {
+            ctx.fillRect(CX - HALF_ROAD - 24, y, stripeLen, stripeW);
+            ctx.fillRect(CX + HALF_ROAD + 2, y, stripeLen, stripeW);
+        }
+
+        // Garis Berhenti Putih Tebal (Stop Lines sesuai lajur kiri)
+        ctx.fillStyle = '#ffffff';
+        // Utara (sisi kiri jalan)
+        ctx.fillRect(CX - HALF_ROAD + 4, CY - STOP_OFFSET - 4, HALF_ROAD - 6, 5);
+        // Selatan (sisi kanan layar)
+        ctx.fillRect(CX + 2, CY + STOP_OFFSET, HALF_ROAD - 6, 5);
+        // Timur (sisi atas jalan)
+        ctx.fillRect(CX + STOP_OFFSET, CY - HALF_ROAD + 4, 5, HALF_ROAD - 6);
+        // Barat (sisi bawah jalan)
+        ctx.fillRect(CX - STOP_OFFSET - 4, CY + 2, 5, HALF_ROAD - 6);
+    }
+
+    function drawInductiveSensors() {
+        const drawLoop = (x, y, w, h, active) => {
+            ctx.strokeStyle = active ? '#38bdf8' : 'rgba(148, 163, 184, 0.35)';
+            ctx.lineWidth = active ? 2.5 : 1.5;
+            ctx.strokeRect(x, y, w, h);
+            if (active) {
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+                ctx.fillRect(x, y, w, h);
+            }
+        };
+
+        // Sensor Utara, Selatan, Timur, Barat
+        drawLoop(CX - 62, CY - STOP_OFFSET - 46, 40, 34, sensors.N);
+        drawLoop(CX + 22, CY + STOP_OFFSET + 12, 40, 34, sensors.S);
+        drawLoop(CX + STOP_OFFSET + 12, CY - 62, 34, 40, sensors.E);
+        drawLoop(CX - STOP_OFFSET - 46, CY + 22, 34, 40, sensors.W);
+    }
+
+    function drawTree(x, y, r) {
+        // Bayangan
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        ctx.arc(x + 4, y + 5, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Daun utama
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight daun kartun
+        ctx.fillStyle = '#2ecc71';
+        ctx.beginPath();
+        ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawBuilding(x, y, w, h, wallColor, roofColor, label) {
+        // Bayangan gedung
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.fillRect(x + 8, y + 8, w, h);
+
+        // Badan gedung
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x, y, w, h);
+
+        // Atap
+        ctx.fillStyle = roofColor;
+        ctx.fillRect(x + 10, y + 10, w - 20, h - 20);
+
+        // Label Gedung
+        if (label) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, x + w / 2, y + h / 2 + 4);
+        }
+    }
+
+    function drawCityBuildings() {
+        // Sudut Kiri Atas: Kantor Polisi / Kontrol PLC
+        drawBuilding(35, 35, 160, 120, '#3b82f6', '#2563eb', 'RUANG KONTROL PLC');
+        drawTree(225, 65, 22);
+        drawTree(65, 200, 20);
+
+        // Sudut Kanan Atas: Rumah Sakit / Gedung Kota
+        drawBuilding(W - 195, 35, 160, 120, '#f8fafc', '#e2e8f0', '');
+        // Simbol + Merah
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(W - 122, 75, 14, 40);
+        ctx.fillRect(W - 135, 88, 40, 14);
+        drawTree(W - 225, 75, 22);
+        drawTree(W - 65, 200, 22);
+
+        // Sudut Kiri Bawah: Kafe / Taman
+        drawBuilding(35, H - 155, 150, 120, '#f97316', '#ea580c', 'KAFE KOTA');
+        drawTree(220, H - 70, 24);
+        drawTree(70, H - 200, 20);
+
+        // Sudut Kanan Bawah: Sekolah / Perpustakaan
+        drawBuilding(W - 195, H - 155, 160, 120, '#eab308', '#ca8a04', 'GEDUNG KOTA');
+        drawTree(W - 225, H - 70, 21);
+        drawTree(W - 65, H - 200, 23);
+
+        // Kabinet Box Panel PLC fisik di trotoar kiri atas
+        const boxX = CX - HALF_ROAD - 44;
+        const boxY = CY - HALF_ROAD - 48;
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(boxX, boxY, 32, 38);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(boxX, boxY, 32, 38);
+        // Lampu indikator kecil pada box PLC
+        ctx.fillStyle = plcMode === 'RUN' ? '#22c55e' : '#ef4444';
+        ctx.beginPath();
+        ctx.arc(boxX + 10, boxY + 10, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(boxX + 22, boxY + 10, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Gambar Mobil Kartun
+    function drawCars() {
+        cars.forEach(car => {
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.angle);
+
+            const L = car.length;
+            const Wd = car.width;
+
+            // Bayangan mobil
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+            roundRect(ctx, -L/2 + 3, -Wd/2 + 4, L, Wd, 6, true, false);
+
+            // Bodi utama
+            ctx.fillStyle = car.palette.body;
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 2;
+            roundRect(ctx, -L/2, -Wd/2, L, Wd, 6, true, true);
+
+            // Kaca depan & belakang
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(L/2 - 12, -Wd/2 + 3, 7, Wd - 6);
+            ctx.fillRect(-L/2 + 4, -Wd/2 + 3, 5, Wd - 6);
+
+            // Atap mobil
+            ctx.fillStyle = car.palette.roof;
+            roundRect(ctx, -L/2 + 10, -Wd/2 + 4, L - 23, Wd - 8, 3, true, false);
+
+            // Lampu depan (Headlights)
+            ctx.fillStyle = '#fef08a';
+            ctx.fillRect(L/2 - 2, -Wd/2 + 3, 3, 5);
+            ctx.fillRect(L/2 - 2, Wd/2 - 8, 3, 5);
+
+            // Lampu rem (menyala merah terang jika berhenti)
+            ctx.fillStyle = car.speed < 0.2 ? '#ff0000' : '#991b1b';
+            ctx.fillRect(-L/2 - 1, -Wd/2 + 3, 2.5, 5);
+            ctx.fillRect(-L/2 - 1, Wd/2 - 8, 2.5, 5);
+
+            ctx.restore();
+        });
+    }
+
+    // Gambar Tiang & Lampu Lalu Lintas 3 Warna Kartun
+    function drawTrafficLights() {
+        // Posisi tiang lampu untuk 4 arah
+        const poles = [
+            { dir: 'N', label: 'UTARA', x: CX - HALF_ROAD - 24, y: CY - HALF_ROAD - 85, badgeX: CX - HALF_ROAD - 42, badgeY: CY - HALF_ROAD - 95 },
+            { dir: 'E', label: 'TIMUR', x: CX + HALF_ROAD + 24, y: CY - HALF_ROAD - 85, badgeX: CX + HALF_ROAD + 42, badgeY: CY - HALF_ROAD - 95 },
+            { dir: 'S', label: 'SELATAN', x: CX + HALF_ROAD + 24, y: CY + HALF_ROAD + 15, badgeX: CX + HALF_ROAD + 42, badgeY: CY + HALF_ROAD + 98 },
+            { dir: 'W', label: 'BARAT', x: CX - HALF_ROAD - 24, y: CY + HALF_ROAD + 15, badgeX: CX - HALF_ROAD - 42, badgeY: CY + HALF_ROAD + 98 }
+        ];
+
+        poles.forEach(p => {
+            const state = lights[p.dir];
+
+            // Kotak Housing Lampu Lalu Lintas
+            const boxW = 26;
+            const boxH = 68;
+            const bx = p.x - boxW / 2;
+            const by = p.y;
+
+            // Bayangan housing
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            roundRect(ctx, bx + 3, by + 3, boxW, boxH, 6, true, false);
+
+            // Bodi hitam housing
+            ctx.fillStyle = '#0f172a';
+            ctx.strokeStyle = state === 'GREEN' ? '#22c55e' : '#475569';
+            ctx.lineWidth = state === 'GREEN' ? 2.5 : 1.5;
+            roundRect(ctx, bx, by, boxW, boxH, 6, true, true);
+
+            // 3 Lensa Lampu (Merah, Kuning, Hijau)
+            drawBulb(p.x, by + 13, 7.5, state === 'RED' ? '#ef4444' : '#451a1a', state === 'RED');
+            drawBulb(p.x, by + 34, 7.5, state === 'YELLOW' ? '#f59e0b' : '#45300c', state === 'YELLOW');
+            drawBulb(p.x, by + 55, 7.5, state === 'GREEN' ? '#22c55e' : '#143822', state === 'GREEN');
+
+            // Label Arah
+            ctx.fillStyle = state === 'GREEN' ? '#22c55e' : '#f8fafc';
+            ctx.font = 'bold 11px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText(p.label, p.badgeX, p.badgeY);
+        });
+    }
+
+    function drawBulb(x, y, r, color, isOn) {
+        ctx.save();
+        if (isOn) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 16;
+        }
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Kilau kartun pada bohlam
+        if (isOn) {
+            ctx.fillStyle = 'rgba(255,255,255,0.65)';
+            ctx.beginPath();
+            ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function drawClouds() {
+        clouds.forEach(c => {
+            c.x += 0.25;
+            if (c.x > W + 100) c.x = -100;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, 24 * c.s, 0, Math.PI * 2);
+            ctx.arc(c.x + 20 * c.s, c.y - 8 * c.s, 28 * c.s, 0, Math.PI * 2);
+            ctx.arc(c.x + 42 * c.s, c.y, 22 * c.s, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+    }
+
+    // Loop Utama Simulasi & PLC Scan Cycle
+    let lastTime = performance.now();
+    let spawnAccumulator = 0;
+
+    function mainLoop(now) {
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        // 1. PLC Timer & State Machine
+        timer += dt;
+
+        if (plcMode === 'RUN') {
+            if (subState === 'GREEN' && timer >= greenDuration) {
+                timer = 0;
+                subState = 'YELLOW';
+            } else if (subState === 'YELLOW' && timer >= yellowDuration) {
+                timer = 0;
+                subState = 'ALL_RED';
+            } else if (subState === 'ALL_RED' && timer >= allRedDuration) {
+                timer = 0;
+                subState = 'GREEN';
+                currentDirIndex = (currentDirIndex + 1) % 4;
+            }
+        }
+
+        applyPlcLogic();
+
+        // 2. Spawn mobil otomatis secara berkala
+        spawnAccumulator += dt;
+        if (spawnAccumulator >= 1.6) {
+            spawnAccumulator = 0;
+            if (cars.length < 18) {
+                const randomDir = DIRS[Math.floor(Math.random() * DIRS.length)];
+                spawnCar(randomDir, 0);
+            }
+        }
+
+        // 3. Update pergerakan mobil
+        updateCars();
+
+        // 4. Render kanvas
+        ctx.clearRect(0, 0, W, H);
+        drawEnvironment();
+        drawCars();
+        drawTrafficLights();
+        drawClouds();
+
+        requestAnimationFrame(mainLoop);
+    }
+
+    // Mulai Simulasi
+    initCars();
+    applyPlcLogic();
+    requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>
